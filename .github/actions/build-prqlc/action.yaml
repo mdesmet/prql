@@ -1,6 +1,9 @@
 name: build-prqlc
 description: >
   Build prqlc
+
+  Note that much of this is copy/pasted into build-prqlc-c, so changes here
+  should generally be copied into that file.
 inputs:
   target:
     description: Build target
@@ -8,6 +11,9 @@ inputs:
   profile:
     description: Build profile option; `dev` or `release`.
     required: true
+  features:
+    description: Features to enable
+    default: ""
 outputs:
   artifact-name:
     description: The name of the artifact
@@ -19,18 +25,27 @@ runs:
     - run: rustup target add ${{ inputs.target }}
       shell: bash
 
+    - run: ./.github/workflows/scripts/set_version.sh
+      shell: bash
+
     - uses: Swatinem/rust-cache@v2
       with:
-        # Share cache with `test-rust`
-        save-if: false
+        prefix-key: ${{ env.version }}-${{ hashFiles('Cargo.lock') }}
+        # Share cache with `test-rust`, except for `musl` targets.
+        save-if:
+          ${{ (github.ref == 'refs/heads/main') && contains(inputs.target,
+          'musl') }}
         shared-key: rust-${{ inputs.target }}
-        prefix-key: 0.8.1
 
     - if: runner.os == 'Linux'
       shell: bash
       run: |
         sudo apt-get update
         sudo apt-get install -y musl-tools
+
+    - if: runner.os == 'Windows' && inputs.profile == 'release'
+      shell: bash
+      run: echo 'RUSTFLAGS=-Ctarget-feature=+crt-static' >>"$GITHUB_ENV"
 
     - if: inputs.target == 'aarch64-unknown-linux-musl'
       shell: bash
@@ -41,35 +56,46 @@ runs:
         echo 'CC=aarch64-linux-gnu-gcc' >>"$GITHUB_ENV"
 
     - name: cargo build
-      uses: richb-hanover/cargo@v1.1.0
+      uses: clechasseur/rs-cargo@v2
       with:
         command: build
+        # We previously had `--package=prqlc` for all, but this caches much
+        # worse than just building the whole workspace.
+        # https://github.com/PRQL/prql/issues/3098, so we just build the whole
+        # workspace — except for the `musl` target, which can't build the whole
+        # workspace. (This is overly complicated and would be great to simplify,
+        # even at the cost of slighly less efficiency.)
         args:
-          --package=prqlc --profile=${{ inputs.profile }} --locked --target=${{
-          inputs.target }}
+          --profile=${{ inputs.profile }} --locked --target=${{ inputs.target }}
+          --no-default-features --features=${{ inputs.features }} ${{
+          contains(inputs.target, 'musl') && '--package=prqlc' ||
+          '--all-targets' }}
 
     - name: Create artifact for Linux and macOS
       shell: bash
       if: runner.os != 'Windows'
       run: |
-        export ARTIFACT_NAME="prqlc-v${{ github.ref_type == 'tag' && github.ref_name || 0 }}-${{ matrix.target }}.tar.gz"
+        export ARTIFACT_NAME="prqlc-${{ github.ref_type == 'tag' && github.ref_name || 0 }}-${{ matrix.target }}.tar.gz"
         echo "ARTIFACT_NAME=${ARTIFACT_NAME}" >>"$GITHUB_ENV"
-        cd target/${{ matrix.target }}/${{ inputs.profile == 'release' && 'release' || 'debug' }}
-        tar czf "../../../${ARTIFACT_NAME}" prqlc ../../../LICENSE -C ../../../prql-compiler/prqlc/ README.md
+        TEMP_DIR=$(mktemp -d)
+        cp prqlc/prqlc/README.md LICENSE "${TEMP_DIR}/"
+        cp -r target/${{ matrix.target }}/${{ inputs.profile == 'release' && 'release' || 'debug' }}/prqlc "${TEMP_DIR}/"
+        tar czf "${ARTIFACT_NAME}" -C "$TEMP_DIR" .
 
     - name: Create artifact for Windows
       shell: bash
       if: runner.os == 'Windows'
       run: |
-        export ARTIFACT_NAME="prqlc-v${{ github.ref_type == 'tag' && github.ref_name || 0 }}-${{ matrix.target }}.zip"
+        export ARTIFACT_NAME="prqlc-${{ github.ref_type == 'tag' && github.ref_name || 0 }}-${{ matrix.target }}.zip"
         echo "ARTIFACT_NAME=${ARTIFACT_NAME}" >>"$GITHUB_ENV"
         cd target/${{ matrix.target }}/${{ inputs.profile == 'release' && 'release' || 'debug' }}
-        7z a "../../../${ARTIFACT_NAME}" prqlc.exe ../../../LICENSE ../../../prql-compiler/prqlc/README.md
+        cp ../../../prqlc/prqlc/README.md .
+        7z a "../../../${ARTIFACT_NAME}" prqlc.exe ../../../LICENSE README.md
 
     - name: Upload prqlc
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: prqlc-${{ inputs.target }}
+        name: prqlc-${{ inputs.target }}-${{ inputs.profile }}
         path: ${{ env.ARTIFACT_NAME }}
 
     - id: echo-artifact-name

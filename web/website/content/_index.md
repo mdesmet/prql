@@ -11,29 +11,7 @@ hero_section:
     enable: false
     link: https://prql-lang.org/book/
     label: "Reference"
-  prql_example: |
-    from invoices
-    filter invoice_date >= @1970-01-16
-    derive {
-      transaction_fees = 0.8,
-      income = total - transaction_fees
-    }
-    filter income > 1
-    group customer_id (
-      aggregate {
-        average total,
-        sum_income = sum income,
-        ct = count total,
-      }
-    )
-    sort {-sum_income}
-    take 10
-    join c=customers (==customer_id)
-    derive name = f"{c.last_name}, {c.first_name}"
-    select {
-      c.customer_id, name, sum_income
-    }
-    derive db_version = s"version()"
+  # the PRQL example is defined in data/examples/hero.yaml
 
 why_prql_section:
   enable: true
@@ -56,9 +34,9 @@ why_prql_section:
           error messages _(in progress)_
     - title: For tools
       content:
-        - PRQL is a stable foundation to build on; we're open-source and will
+        - PRQL's vision is a foundation to build on; we're open-source and will
           never have a commercial product
-        - PRQL is a single secular standard which tools can target
+        - PRQL is growing into a single secular standard which tools can target
         - PRQL is easy for machines to read & write
     - title: For HackerNews enthusiasts
       content:
@@ -80,71 +58,19 @@ showcase_section:
     - link: "/book/"
       label: "Book"
   examples:
-    - id: basics
-      label: Basic example
-      prql: |
-        from employees
-        select {id, first_name, age}
-        sort age
-        take 10
-      sql: |
-        SELECT
-          id,
-          first_name,
-          age
-        FROM
-          employees
-        ORDER BY
-          age
-        LIMIT
-          10
-
-    - id: friendly-syntax
-      label: Friendly syntax
-      prql: |
-        from track_plays
-        filter plays > 10_000                # Readable numbers
-        filter (length | in 60..240)         # Ranges with `..`
-        filter recorded > @2008-01-01        # Simple date literals
-        filter released - recorded < 180days # Nice interval literals
-        sort {-length}                       # Concise order direction
-
-      sql: |
-        SELECT
-          *
-        FROM
-          track_plays
-        WHERE
-          plays > 10000
-          AND length BETWEEN 60 AND 240
-          AND recorded > DATE '2008-01-01'
-          AND released - recorded < INTERVAL 180 DAY
-        ORDER BY
-          length DESC
-
-    - id: orthogonal
-      label: Orthogonality
-      prql: |
-        from employees
-        # `filter` before aggregations...
-        filter start_date > @2021-01-01
-        group country (
-          aggregate {max_salary = max salary}
-        )
-        # ...and `filter` after aggregations!
-        filter max_salary > 100_000
-      sql: |
-        SELECT
-          country,
-          MAX(salary) AS max_salary
-        FROM
-          employees
-        WHERE
-          start_date > DATE '2021-01-01'
-        GROUP BY
-          country
-        HAVING
-          MAX(salary) > 100000
+    # The examples are defined in data/examples/, this list just defines their order.
+    - basic
+    - friendly-syntax
+    - orthogonal
+    - expressions
+    - f-strings
+    - windows
+    - functions
+    - top-n
+    - s-strings
+    - joins
+    - null-handling
+    - dialects
 
     # Currently excluded because it's lots of text
     # prql: |
@@ -160,166 +86,6 @@ showcase_section:
     #       ]
     #     )
     #   )
-
-    - id: expressions
-      label: Expressions
-      prql: |
-        from track_plays
-        derive {
-          finished = started + unfinished,
-          fin_share = finished / started,        # Use previous definitions
-          fin_ratio = fin_share / (1-fin_share), # BTW, hanging commas are optional!
-        }
-
-      sql: |
-        SELECT
-          *,
-          started + unfinished AS finished,
-          ((started + unfinished) / started) AS fin_share,
-          (
-            ((started + unfinished) / started) / (1 - ((started + unfinished) / started))
-          ) AS fin_ratio
-        FROM
-          track_plays
-
-    # markdown-link-check-disable
-    - id: f-strings
-      label: F-strings
-      prql: |
-        from web
-        # Just like Python
-        select url = f"https://www.{domain}.{tld}/{page}"
-      sql: |
-        SELECT
-          CONCAT('https://www.', domain, '.', tld, '/', page) AS url
-        FROM
-          web
-    # markdown-link-check-enable
-    - id: windows
-      label: Windows
-      prql: |
-        from employees
-        group employee_id (
-          sort month
-          window rolling:12 (
-            derive {trail_12_m_comp = sum paycheck}
-          )
-        )
-      sql: |
-        SELECT
-          *,
-          SUM(paycheck) OVER (
-            PARTITION BY employee_id
-            ORDER BY
-              month ROWS BETWEEN 11 PRECEDING AND CURRENT ROW
-          ) AS trail_12_m_comp
-        FROM
-          employees
-
-    - id: functions
-      label: Functions
-      prql: |
-        let fahrenheit_from_celsius = temp -> temp * 9/5 + 32
-
-        from weather
-        select temp_f = (fahrenheit_from_celsius temp_c)
-      sql: |
-        SELECT
-          (temp_c * 9 / 5) + 32 AS temp_f
-        FROM
-          weather
-
-    - id: top-n
-      label: Top N by group
-      prql: |
-        # Most recent employee in each role
-        # Quite difficult in SQL...
-        from employees
-        group role (
-          sort join_date
-          take 1
-        )
-      sql: |
-        WITH table_0 AS (
-          SELECT
-            *,
-            ROW_NUMBER() OVER (
-              PARTITION BY role
-              ORDER BY
-                join_date
-            ) AS _expr_0
-          FROM
-            employees
-        )
-        SELECT
-          *
-        FROM
-          table_0
-        WHERE
-          _expr_0 <= 1
-
-    - id: s-string
-      label: S-strings
-      prql: |
-        # There's no `version` in PRQL, but s-strings
-        # let us embed SQL as an escape hatch:
-        from x
-        derive db_version = s"version()"
-      sql: |
-        SELECT
-          *,
-          version() AS db_version
-        FROM x
-
-    - id: joins
-      label: Joins
-      prql: |
-        from employees
-        join b=benefits (==employee_id)
-        join side:left p=positions (p.id==employees.employee_id)
-        select {employees.employee_id, p.role, b.vision_coverage}
-      sql: |
-        SELECT
-          employees.employee_id,
-          p.role,
-          b.vision_coverage
-        FROM
-          employees
-          JOIN benefits AS b ON employees.employee_id = b.employee_id
-          LEFT JOIN positions AS p ON p.id = employees.employee_id
-
-    - id: null-handling
-      label: Null handling
-      prql: |
-        from users
-        filter last_login != null
-        filter deleted_at == null
-        derive channel = channel ?? "unknown"
-      sql: |
-        SELECT
-          *,
-          COALESCE(channel, 'unknown') AS channel
-        FROM
-          users
-        WHERE
-          last_login IS NOT NULL
-          AND deleted_at IS NULL
-
-    - id: dialects
-      label: Dialects
-      prql: |
-        prql target:sql.mssql  # Will generate TOP rather than LIMIT
-
-        from employees
-        sort age
-        take 10
-      sql: |
-        SELECT
-          TOP (10) *
-        FROM
-          employees
-        ORDER BY
-          age
 
 principles_section:
   enable: true
@@ -381,7 +147,7 @@ tools_section:
         "Online in-browser playground that compiles PRQL to SQL as you type."
 
     - link: https://pyprql.readthedocs.io/
-      label: "PyPrql"
+      label: "pyprql"
       text: |
         Provides Jupyter/IPython cell magic and Pandas accessor.
 
@@ -396,52 +162,82 @@ tools_section:
 
         `brew install prqlc`
 
+        `winget install prqlc`
+
 integrations_section:
   enable: true
   title: "Integrations"
   sections:
+    - label: "ClickHouse"
+      link: https://clickhouse.com/docs/en/guides/developer/alternative-query-languages
+      text: |
+        ClickHouse natively supports PRQL with
+
+        `SET dialect = 'prql'`
+
     - label: "Jupyter/IPython"
       link: https://pyprql.readthedocs.io/en/latest/magic_readme.html
       text:
-        "PyPrql contains a Jupyter extension, which executes a PRQL cell against
+        "pyprql contains a Jupyter extension, which executes a PRQL cell against
         a database. It can also set up an in-memory DuckDB instance, populated
         with a pandas DataFrame."
-
-    - label: Visual Studio Code
-      link: https://marketplace.visualstudio.com/items?itemName=prql-lang.prql-vscode
-      text: Extension with syntax highlighting and an upcoming language server.
-
-    - label: "Prefect"
-      link: https://prql-lang.org/book/integrations/prefect.html
-      text: Add PRQL models to your Prefect workflows with a single function.
 
     - label: "DuckDB"
       link: https://github.com/ywelsch/duckdb-prql
       text: A DuckDB extension to execute PRQL
+
+    - label: "QStudio"
+      link: https://www.timestored.com/qstudio/prql-ide
+      text:
+        "QStudio is a SQL GUI that lets you browse tables, run SQL scripts, and
+        chart and export the results. QStudio runs on Windows, macOS and Linux,
+        and works with every popular database including mysql, postgresql,
+        mssql, kdb..."
+
+    - label: "Prefect"
+      link: https://prql-lang.org/book/project/integrations/prefect.html
+      text: Add PRQL models to your Prefect workflows with a single function.
+
+    - label: Visual Studio Code
+      link: https://marketplace.visualstudio.com/items?itemName=prql-lang.prql-vscode
+      text: Extension with syntax highlighting and live SQL compilation.
+
+    - label: "PostgreSQL"
+      link: https://github.com/kaspermarstal/plprql
+      text: Write PRQL functions in PostgreSQL
+
+    - label: "Databend"
+      link: https://www.databend.com/blog/2024-04-03-databend-integrates-prql/
+      text: Databend natively supports PRQL
 
 bindings_section:
   enable: true
   title: "Bindings"
   section_id: "bindings"
   sections:
-    - link: https://pypi.org/project/prql-python
-      label: "prql-python"
-      text: Python bindings for prql-compiler.
+    - link: https://pypi.org/project/prqlc
+      label: "prqlc-python"
+      text: Python bindings for prqlc.
 
-    - link: https://www.npmjs.com/package/prql-js
-      label: "prql-js"
-      text: "JavaScript bindings for prql-compiler."
+    - link: https://www.npmjs.com/package/prqlc
+      label: "prqlc-js"
+      text: "JavaScript bindings for prqlc."
 
     - link: https://CRAN.R-project.org/package=prqlr
       label: "prqlr"
-      text: "R bindings for prql-compiler."
+      text: "R bindings for prqlc."
 
-    - link: "https://crates.io/crates/prql-compiler"
-      label: "prql-compiler"
+    - link: "https://crates.io/crates/prqlc"
+      label: "prqlc"
       text: |
-        Reference compiler implementation, written in Rust. Transpile, format and annotate PRQL queries.
+        Compiler implementation, written in Rust. Compile, format & annotate PRQL queries.
 
-comments_section:
+    - link: https://prql-lang.org/book/project/bindings/index.html
+      label: Others
+      text: |
+        Java, C, C++, Elixir, .NET, and PHP have unsupported or nascent bindings.
+
+testimonials_section:
   enable: true
   title: "What people are saying"
   # The testimonials are in data/testimonials.yaml.

@@ -23,14 +23,15 @@ language if the tooling is made accessible enough.
 
 Language design & development in the last year have been focused on these areas:
 
-- design of basic [transforms](https://prql-lang.org/book/transforms/index.html)
-  and their [interactions](https://github.com/PRQL/prql/issues/300),
+- design of basic
+  [transforms](https://prql-lang.org/book/reference/stdlib/transforms/) and
+  their [interactions](https://github.com/PRQL/prql/issues/300),
 
 - fundamentals of how [functions](https://github.com/PRQL/prql/issues/444) and
   pipelines are [evaluated](#define-functional-semantics).
 
 - small quality-of-life language features (e.g. syntax for
-  [f-strings, dates, coalesce operator](https://prql-lang.org/book/syntax/index.html),
+  [f-strings, dates, coalesce operator](https://prql-lang.org/book/reference/syntax/),
   [case](https://github.com/PRQL/prql/issues/504)),
 
 PRQL is now in a state where it can greatly improve the developer experience for
@@ -67,8 +68,8 @@ want to fix that and put a spotlight on the amazing work that was done.
 ### Playground
 
 We have a [Playground](https://prql-lang.org/playground/) that can compile and
-execute PRQL queries in-browser. It's using prql-compiler and DuckDB, both
-compiled to WASM modules.
+execute PRQL queries in-browser. It's using prqlc and DuckDB, both compiled to
+WASM modules.
 
 ![PRQL Playground](URpCf29.png)
 
@@ -95,8 +96,7 @@ of how functions in PRQL work, what they can express and how can they be abused.
 
 To keep this post brief, we'll expose a single snippet of what's possible and
 invite you to read more in
-[a recent post](https://prql-lang.org/functional-relations/) or in
-[the language documentation](https://prql-lang.org/book/internals/functional-lang.html).
+[a recent post](https://prql-lang.org/functional-relations/).
 
 ```prql
 let take_oldest = n rel -> (
@@ -114,11 +114,10 @@ take_oldest 3
 
 ### Relational Query
 
-The design of prql-compiler strives to have a complexity bottleneck with an
-intermediate representation named
-[Relation Query](https://docs.rs/prql-compiler/latest/prql_compiler/ast/rq/index.html)
-or RQ for short. Think of it as equivalent to a
-[Substrait plan](https://substrait.io/).
+The design of prqlc strives to have a complexity bottleneck with an intermediate
+representation named
+[Relation Query](https://docs.rs/prqlc/latest/prqlc/ir/rq/index.html) or RQ for
+short. Think of it as equivalent to a [Substrait plan](https://substrait.io/).
 
 Its goal is the ability to express any operation possible in SQL while
 containing as few constructs as possible. This makes it easy to implement
@@ -127,6 +126,6 @@ relations or dataframes.
 
 ![](GXLvoXn.png)
 
-> Note how prql-compiler inferred the structure of the table we are selecting
-> from. It knows that it must contain columns `billing_city` and `total`, but
-> also notes that there may be many other columns.
+> Note how prqlc inferred the structure of the table we are selecting from. It
+> knows that it must contain columns `billing_city` and `total`, but also notes
+> that there may be many other columns.
