@@ -87,7 +87,7 @@ vergen-gitcl = { version = "1.0.0", features = ["build"] }
 
 # unique dependencies from the CLI, marked as optional and included in the 'cli'
 # feature
-anyhow = { version = "1.0.99", features = ["backtrace"], optional = true }
+anyhow = { version = "1.0.100", features = ["backtrace"], optional = true }
 clap = { version = "4.5.0", features = [
   "derive",
   "env",
@@ -142,7 +142,7 @@ insta-cmd = { workspace = true }
 rstest = "0.26.1"
 similar = { workspace = true }
 similar-asserts = { workspace = true }
-tempfile = { version = "3.21.0" }
+tempfile = { version = "3.22.0" }
 test_each_file = "0.3.5"
 
 # We use `benches/bench.rs` for the benchmark harness so disable searching for
